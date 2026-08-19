@@ -90,6 +90,7 @@ jobs:
           ROOT="$RUNNER_TEMP/caliper-rust-bootstrap"
           mkdir -p "$ROOT/cargo-home"
           cp -a "$(rustc --print sysroot)" "$ROOT/toolchain"
+          rm -rf "$ROOT/toolchain/share/doc" "$ROOT/toolchain/share/man" || true
           if [[ -d "$HOME/.cargo/registry" ]]; then
             cp -a "$HOME/.cargo/registry" "$ROOT/cargo-home/registry"
           fi
@@ -100,12 +101,23 @@ jobs:
           printf '%s\n' 'export CARGO_HOME="$CALIPER_BOOTSTRAP_ROOT/cargo-home"' >> "$ROOT/env.sh"
           printf '%s\n' 'export PATH="$CALIPER_BOOTSTRAP_ROOT/toolchain/bin:$PATH"' >> "$ROOT/env.sh"
 
-      - name: Upload bundle
+      - name: Upload toolchain
         uses: actions/upload-artifact@v4
         with:
-          name: caliper-rust-1.97.1-bootstrap
-          path: ${{ runner.temp }}/caliper-rust-bootstrap
-          compression-level: 0
+          name: caliper-rust-1.97.1-toolchain
+          path: |
+            ${{ runner.temp }}/caliper-rust-bootstrap/toolchain
+            ${{ runner.temp }}/caliper-rust-bootstrap/env.sh
+          compression-level: 9
+          retention-days: 1
+          if-no-files-found: error
+
+      - name: Upload Cargo cache
+        uses: actions/upload-artifact@v4
+        with:
+          name: caliper-rust-1.97.1-cargo-home
+          path: ${{ runner.temp }}/caliper-rust-bootstrap/cargo-home
+          compression-level: 9
           retention-days: 1
           if-no-files-found: error
 
