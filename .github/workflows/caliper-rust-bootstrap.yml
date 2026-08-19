@@ -1,0 +1,106 @@
+name: Caliper Rust bootstrap
+
+on:
+  push:
+    branches:
+      - agent/caliper-rust-bootstrap
+
+permissions:
+  contents: read
+
+jobs:
+  bundle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Install pinned Rust toolchain
+        run: |
+          rustup toolchain install 1.97.1 --profile minimal --component rustfmt
+          rustup default 1.97.1
+          rustc --version
+          cargo --version
+
+      - name: Fetch exact Caliper registry packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/caliper-fetch/src
+          cat > /tmp/caliper-fetch/Cargo.toml <<'EOF'
+          [package]
+          name = "caliper-fetch"
+          version = "0.0.0"
+          edition = "2024"
+
+          [dependencies]
+          block-buffer = "=0.10.4"
+          bumpalo = "=3.20.3"
+          bytes = "=1.12.1"
+          cfg-if = "=1.0.4"
+          cpufeatures = "=0.2.17"
+          crypto-common = "=0.1.7"
+          digest = "=0.10.7"
+          futures-core = "=0.3.34"
+          futures-task = "=0.3.34"
+          futures-util = "=0.3.34"
+          generic-array = "=0.14.7"
+          getrandom = "=0.4.3"
+          itoa = "=1.0.18"
+          js-sys = "=0.3.104"
+          libc = "=0.2.189"
+          memchr = "=2.8.3"
+          once_cell = "=1.21.4"
+          pin-project-lite = "=0.2.17"
+          proc-macro2 = "=1.0.107"
+          quote = "=1.0.47"
+          r-efi = "=6.0.0"
+          rustversion = "=1.0.23"
+          serde = { version = "=1.0.229", features = ["derive"] }
+          serde_core = "=1.0.229"
+          serde_derive = "=1.0.229"
+          serde_json = { version = "=1.0.151", features = ["arbitrary_precision"] }
+          sha2 = "=0.10.9"
+          slab = "=0.4.12"
+          syn2 = { package = "syn", version = "=2.0.119" }
+          syn3 = { package = "syn", version = "=3.0.3" }
+          thiserror = "=2.0.20"
+          thiserror-impl = "=2.0.20"
+          tokio = { version = "=1.53.1", features = ["io-std", "io-util", "macros", "rt-multi-thread", "time"] }
+          tokio-macros = "=2.7.2"
+          typenum = "=1.20.1"
+          unicode-ident = "=1.0.24"
+          uuid = { version = "=1.24.1", features = ["serde", "v4"] }
+          version_check = "=0.9.5"
+          wasm-bindgen = "=0.2.127"
+          wasm-bindgen-macro = "=0.2.127"
+          wasm-bindgen-macro-support = "=0.2.127"
+          wasm-bindgen-shared = "=0.2.127"
+          zmij = "=1.0.23"
+          EOF
+          printf 'pub fn bootstrap() {}\n' > /tmp/caliper-fetch/src/lib.rs
+          cargo fetch --manifest-path /tmp/caliper-fetch/Cargo.toml
+
+      - name: Assemble bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="$RUNNER_TEMP/caliper-rust-bootstrap"
+          mkdir -p "$ROOT/cargo-home"
+          cp -a "$(rustc --print sysroot)" "$ROOT/toolchain"
+          if [[ -d "$HOME/.cargo/registry" ]]; then
+            cp -a "$HOME/.cargo/registry" "$ROOT/cargo-home/registry"
+          fi
+          if [[ -d "$HOME/.cargo/git" ]]; then
+            cp -a "$HOME/.cargo/git" "$ROOT/cargo-home/git"
+          fi
+          printf '%s\n' 'export CALIPER_BOOTSTRAP_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"' > "$ROOT/env.sh"
+          printf '%s\n' 'export CARGO_HOME="$CALIPER_BOOTSTRAP_ROOT/cargo-home"' >> "$ROOT/env.sh"
+          printf '%s\n' 'export PATH="$CALIPER_BOOTSTRAP_ROOT/toolchain/bin:$PATH"' >> "$ROOT/env.sh"
+
+      - name: Upload bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: caliper-rust-1.97.1-bootstrap
+          path: ${{ runner.temp }}/caliper-rust-bootstrap
+          compression-level: 0
+          retention-days: 1
+          if-no-files-found: error
